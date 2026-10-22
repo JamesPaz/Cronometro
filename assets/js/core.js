@@ -148,28 +148,34 @@ window.App = window.App || {};
   };
 
   Core.markStart = function (ids) {
+    return Core.markStartAt(ids, Core.elapsed());
+  };
+
+  Core.markStartAt = function (ids, timeMs) {
     var test = Core.state.current;
     if (!test) { return 0; }
-    var now = Core.elapsed();
     var n = 0;
     ids.forEach(function (id) {
       var e = test.entries[id];
-      if (e && e.start === null && e.finish === null) { e.start = now; n++; }
+      if (e && e.start === null && e.finish === null) { e.start = timeMs; n++; }
     });
     Core.recomputePositions(test);
     return n;
   };
 
   Core.markFinish = function (ids) {
+    return Core.markFinishAt(ids, Core.elapsed());
+  };
+
+  Core.markFinishAt = function (ids, timeMs) {
     var test = Core.state.current;
     if (!test) { return 0; }
-    var now = Core.elapsed();
     var n = 0;
     ids.forEach(function (id) {
       var e = test.entries[id];
       if (e && e.finish === null && e.start !== null) {
-        e.finish = now;
-        e.duration = Math.max(0, now - e.start);
+        e.finish = timeMs;
+        e.duration = Math.max(0, timeMs - e.start);
         n++;
       }
     });

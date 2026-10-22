@@ -86,6 +86,7 @@
     els.modal.attr('hidden', true);
     modalGen++;
     pickerState = null;
+    $(document).off('keydown.capture');
   }
 
   /* =====================================================
@@ -159,7 +160,7 @@
   }
 
   function openPicker(cfg) {
-    var state = { items: [], checked: {} };
+    var state = { items: [], checked: {}, captures: [], activeCap: -1, assign: {} };
     function readItems() {
       return cfg.getItems ? cfg.getItems() : (cfg.items || []);
     }
@@ -170,15 +171,51 @@
     state.items.forEach(function (it) { state.checked[it.id] = defaultFor(it); });
     pickerState = state;
 
+    function capTime(ci) {
+      return (ci != null && state.captures[ci]) ? state.captures[ci].t : null;
+    }
+
+    function captureBarHtml() {
+      if (!cfg.captureTime) { return ''; }
+      var html = '<div class="capture">' +
+        '<div class="capture__bar">' +
+        '<span class="capture__now">Tiempo actual <b data-live-now>' + Core.fmtFull(Core.elapsed()) + '</b></span>' +
+        '<button class="btn btn--warn btn--sm" type="button" data-capture-now="1">' +
+        Core.escape(cfg.captureTime.label) + ' <span class="kbd">T</span></button>' +
+        '</div>';
+      if (state.captures.length) {
+        html += '<div class="capture__list">';
+        state.captures.forEach(function (c, i) {
+          var n = 0;
+          state.items.forEach(function (it) { if (state.assign[it.id] === i) { n++; } });
+          html += '<div class="cap' + (i === state.activeCap ? ' is-active' : '') + '" data-cap="' + i + '" title="Usar esta captura para los equipos que marques">' +
+            '<span class="cap__n">#' + (i + 1) + '</span>' +
+            '<span class="cap__t">' + Core.fmtFull(c.t) + '</span>' +
+            '<span class="cap__count">' + (n ? n + ' eq' : '') + '</span>' +
+            '<button class="cap__x" type="button" data-cap-del="' + i + '" title="Quitar captura">&times;</button>' +
+            '</div>';
+        });
+        html += '</div>';
+      }
+      html += '<div class="note note--dim capture__hint">' +
+        Core.escape(cfg.captureTime.hint || 'Captura el tiempo en el instante exacto y despues marca los equipos.') +
+        '</div>';
+      return html + '</div>';
+    }
+
     function renderList() {
       var items = state.items;
       var html = cfg.extraTopHtml ? cfg.extraTopHtml() : '';
+      html += captureBarHtml();
       if (!items.length) {
         html += '<div class="sel__empty">' + (cfg.emptyText || 'No hay equipos disponibles.') + '</div>';
       } else {
         html += '<div class="sel">';
         items.forEach(function (it) {
           var on = !!state.checked[it.id];
+          var ct = capTime(state.assign[it.id]);
+          var tag = ct != null ? Core.fmtFull(ct) : (it.tag || '');
+          var tagCls = ct != null ? ' sel__tag--time' : (it.tagGrey ? ' sel__tag--grey' : '');
           html += '<label class="sel__item' + (on ? ' is-checked' : '') + '" data-search="' +
             Core.escape((it.nombre + ' ' + (it.meta || '')).toLowerCase()) + '">' +
             '<input type="checkbox" data-id="' + Core.escape(it.id) + '"' + (on ? ' checked' : '') + '>' +
@@ -186,7 +223,9 @@
             '<div class="sel__name">' + Core.escape(it.nombre) + '</div>' +
             (it.meta ? '<div class="sel__meta">' + Core.escape(it.meta) + '</div>' : '') +
             '</div>' +
-            (it.tag ? '<div class="sel__tag' + (it.tagGrey ? ' sel__tag--grey' : '') + '">' + Core.escape(it.tag) + '</div>' : '') +
+            ((cfg.captureTime || it.tag)
+              ? '<div class="sel__tag' + tagCls + '" data-tag="' + Core.escape(it.tag || '') + '">' + Core.escape(tag) + '</div>'
+              : '') +
             '</label>';
         });
         html += '</div>';
@@ -220,8 +259,56 @@
         this.checked = value;
         state.checked[id] = value;
         $(this).closest('.sel__item').toggleClass('is-checked', value);
+        if (cfg.captureTime) {
+          if (value && state.activeCap >= 0) { state.assign[id] = state.activeCap; }
+          else { delete state.assign[id]; }
+        }
+      });
+      if (cfg.captureTime) { refresh(); }
+    }
+
+    function updateCapCounts() {
+      els.modalBody.find('.cap').each(function () {
+        var $c = $(this);
+        var i = Number($c.attr('data-cap'));
+        var n = 0;
+        state.items.forEach(function (it) { if (state.assign[it.id] === i) { n++; } });
+        $c.find('.cap__count').text(n ? n + ' eq' : '');
       });
     }
+
+    function captureNow() {
+      if (!cfg.captureTime) { return; }
+      state.captures.push({ t: Core.elapsed() });
+      state.activeCap = state.captures.length - 1;
+      state.items.forEach(function (it) {
+        if (state.assign[it.id] == null) { state.checked[it.id] = false; }
+      });
+      refresh();
+      toast('Tiempo capturado: ' + Core.fmtFull(state.captures[state.activeCap].t) +
+        (cfg.captureTime.toast || '. Marca los equipos a ese tiempo.'), 'ok', 2800);
+    }
+
+    function deleteCapture(i) {
+      state.captures.splice(i, 1);
+      var next = {};
+      Object.keys(state.assign).forEach(function (id) {
+        var ci = state.assign[id];
+        if (ci === i) { return; }
+        next[id] = ci > i ? ci - 1 : ci;
+      });
+      state.assign = next;
+      if (state.activeCap === i) { state.activeCap = state.captures.length - 1; }
+      else if (state.activeCap > i) { state.activeCap--; }
+      refresh();
+    }
+
+    state.liveNow = function () {
+      var $el = els.modalBody.find('[data-live-now]');
+      if (!$el.length) { return; }
+      var t = Core.fmtFull(Core.elapsed());
+      if ($el.text() !== t) { $el.text(t); }
+    };
 
     openModal({
       title: cfg.title,
@@ -233,15 +320,40 @@
         els.modalBody.find('input[type=checkbox]:checked').each(function () {
           ids.push($(this).attr('data-id'));
         });
-        if (cfg.onConfirm) { return cfg.onConfirm(ids); }
+        if (cfg.onConfirm) { return cfg.onConfirm(ids, { assign: state.assign, captures: state.captures }); }
         return true;
       },
       onOpen: function () {
         els.modalBody.off('change.picker').on('change.picker', 'input[type=checkbox]', function () {
           var id = $(this).attr('data-id');
+          var $item = $(this).closest('.sel__item');
           state.checked[id] = this.checked;
-          $(this).closest('.sel__item').toggleClass('is-checked', this.checked);
+          $item.toggleClass('is-checked', this.checked);
+          if (cfg.captureTime) {
+            if (this.checked && state.activeCap >= 0) { state.assign[id] = state.activeCap; }
+            else { delete state.assign[id]; }
+            var ct = this.checked ? capTime(state.activeCap) : null;
+            $item.find('.sel__tag')
+              .toggleClass('sel__tag--time', ct != null)
+              .text(ct != null ? Core.fmtFull(ct) : ($item.find('.sel__tag').attr('data-tag') || ''));
+            updateCapCounts();
+          }
         });
+        els.modalBody.off('click.capture')
+          .on('click.capture', '[data-capture-now]', function (e) {
+            e.preventDefault();
+            captureNow();
+          })
+          .on('click.capture', '[data-cap]', function (e) {
+            if ($(e.target).closest('[data-cap-del]').length) { return; }
+            state.activeCap = Number($(this).attr('data-cap'));
+            refresh();
+          })
+          .on('click.capture', '[data-cap-del]', function (e) {
+            e.stopPropagation();
+            e.preventDefault();
+            deleteCapture(Number($(this).attr('data-cap-del')));
+          });
         els.modalBody.off('input.picker').on('input.picker', '[data-picker-input]', function () {
           if (cfg.onInput) { cfg.onInput(this.value, this); }
         });
@@ -262,6 +374,25 @@
           };
           els.fileInput.val('').trigger('click');
         });
+        if (cfg.captureTime) {
+          $(document).off('keydown.capture').on('keydown.capture', function (e) {
+            if (els.modal.is('[hidden]')) { return; }
+            if (e.ctrlKey || e.metaKey || e.altKey) { return; }
+            var tag = (e.target && e.target.tagName ? e.target.tagName : '').toLowerCase();
+            var type = (e.target && e.target.type ? String(e.target.type) : '').toLowerCase();
+            var typing = tag === 'textarea' || tag === 'select' ||
+              (tag === 'input' && type !== 'checkbox' && type !== 'radio' && type !== 'button');
+            if (typing) { return; }
+            if (e.key === 't' || e.key === 'T') {
+              e.preventDefault();
+              captureNow();
+            }
+          });
+        }
+        if (cfg.captureTime && !state.captures.length) {
+          state.captures.push({ t: Core.elapsed() });
+          state.activeCap = 0;
+        }
         refresh();
       }
     });
@@ -543,15 +674,31 @@
     }
     openPicker({
       title: 'Marcar inicio',
-      sub: 'Selecciona los equipos que <b>arrancan ahora</b>. Tiempo actual: <b>' + Core.fmtFull(Core.elapsed()) + '</b>',
+      sub: 'Cada pulsacion de <b>Marcar inicio ahora</b> (T) guarda el tiempo de ese instante. Elige la captura y marca los equipos que arrancaron a ese tiempo.',
       confirmLabel: 'Registrar inicio',
+      defaultChecked: false,
       items: items,
-      onConfirm: function (ids) {
+      captureTime: {
+        label: 'Marcar inicio ahora',
+        hint: 'La captura resaltada se aplica a los equipos que marques. Haz clic en otra captura para asignarle equipos.',
+        toast: '. Marca los equipos que arrancan a ese tiempo.'
+      },
+      onConfirm: function (ids, ctx) {
         if (!ids.length) { toast('Selecciona al menos un equipo.', 'warn'); return false; }
-        var n = Core.markStart(ids);
+        var groups = {};
+        ids.forEach(function (id) {
+          var ci = ctx.assign[id];
+          var t = (ci != null && ctx.captures[ci]) ? ctx.captures[ci].t : null;
+          var key = t == null ? 'now' : String(t);
+          (groups[key] = groups[key] || []).push(id);
+        });
+        var total = 0;
+        Object.keys(groups).forEach(function (key) {
+          total += Core.markStartAt(groups[key], key === 'now' ? Core.elapsed() : Number(key));
+        });
         save();
         render();
-        toast('Inicio registrado para ' + n + (n === 1 ? ' equipo.' : ' equipos.'), 'ok');
+        toast('Inicio registrado para ' + total + (total === 1 ? ' equipo.' : ' equipos.'), 'ok');
       }
     });
   }
@@ -572,15 +719,31 @@
     }
     openPicker({
       title: 'Marcar fin',
-      sub: 'Selecciona los equipos que <b>terminaron la prueba</b>. Tiempo actual: <b>' + Core.fmtFull(Core.elapsed()) + '</b>',
+      sub: 'Cada pulsacion de <b>Marcar fin ahora</b> (T) guarda el tiempo de ese instante. Elige la captura y marca los equipos que llegaron a ese tiempo.',
       confirmLabel: 'Registrar fin',
+      defaultChecked: false,
       items: items,
-      onConfirm: function (ids) {
+      captureTime: {
+        label: 'Marcar fin ahora',
+        hint: 'La captura resaltada se aplica a los equipos que marques. Haz clic en otra captura para asignarle equipos.',
+        toast: '. Marca los equipos que llegaron a ese tiempo.'
+      },
+      onConfirm: function (ids, ctx) {
         if (!ids.length) { toast('Selecciona al menos un equipo.', 'warn'); return false; }
-        var n = Core.markFinish(ids);
+        var groups = {};
+        ids.forEach(function (id) {
+          var ci = ctx.assign[id];
+          var t = (ci != null && ctx.captures[ci]) ? ctx.captures[ci].t : null;
+          var key = t == null ? 'now' : String(t);
+          (groups[key] = groups[key] || []).push(id);
+        });
+        var total = 0;
+        Object.keys(groups).forEach(function (key) {
+          total += Core.markFinishAt(groups[key], key === 'now' ? Core.elapsed() : Number(key));
+        });
         save();
         render();
-        toast('Fin registrado para ' + n + (n === 1 ? ' equipo.' : ' equipos.'), 'ok');
+        toast('Fin registrado para ' + total + (total === 1 ? ' equipo.' : ' equipos.'), 'ok');
       }
     });
   }
@@ -907,6 +1070,7 @@
       updateLiveTimes();
       els.controlNote.text(Core.state.current.nombre + ' en curso - ' + Core.fmtFull(ms));
     }
+    if (pickerState && pickerState.liveNow) { pickerState.liveNow(); }
   }
 
   /* =====================================================
