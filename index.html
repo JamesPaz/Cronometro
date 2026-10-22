@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cronometro de pruebas por equipos</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><circle cx='12' cy='13' r='9' fill='none' stroke='%2322d3ee' stroke-width='2'/><path d='M12 9v4l3 2' fill='none' stroke='%2322d3ee' stroke-width='2' stroke-linecap='round'/><path d='M9 2h6' stroke='%2322d3ee' stroke-width='2' stroke-linecap='round'/></svg>">
+<link rel="stylesheet" href="assets/css/styles.css">
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ================= ETAPA PRINCIPAL ================= -->
+  <main class="stage">
+    <header class="stage__head">
+      <div class="brand">
+        <span class="brand__mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+            <circle cx="12" cy="13" r="8"></circle>
+            <path d="M12 9v4l2.5 2"></path>
+            <path d="M9 2h6"></path><path d="M12 2v3"></path>
+          </svg>
+        </span>
+        <div class="brand__text">
+          <h1 class="brand__title">Cronometro de pruebas</h1>
+          <p class="brand__sub" id="testName">Sin prueba activa</p>
+        </div>
+      </div>
+      <div class="stage__meta">
+        <span class="chip chip--status" id="chipStatus">En espera</span>
+        <span class="chip" id="chipClockDate"></span>
+        <button class="iconbtn" id="btnPanel" data-act="toggle-panel" title="Ocultar panel lateral" aria-label="Ocultar panel lateral">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="4" width="18" height="16" rx="2"></rect>
+            <path d="M15 4v16"></path>
+            <path d="M18.5 9.5 16 12l2.5 2.5"></path>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <section class="stage__body">
+      <!-- Reloj -->
+      <div class="clock" id="clockView">
+        <div class="clock__label">Tiempo de prueba</div>
+        <div class="clock__digits">
+          <span class="clock__hms" id="clockHms">00:00:00</span>
+          <span class="clock__cs" id="clockCs">.00</span>
+        </div>
+        <div class="clock__meta" id="clockMeta">Esperando seleccion de equipos para iniciar</div>
+        <div class="clock__pulse" id="clockPulse"><i></i><span id="clockPulseText">En espera</span></div>
+      </div>
+
+      <!-- Podio -->
+      <div class="podium" id="podiumView" hidden></div>
+    </section>
+
+    <footer class="stage__foot">
+      <div class="hint" id="hint">
+        Carga los equipos, elige quienes arrancan en <b>00:00:00</b> y el cronometro empieza a correr. El reloj nunca se detiene.
+      </div>
+      <div class="quick" id="quickActions">
+        <button class="btn btn--ghost" data-act="new-test">Nueva prueba</button>
+        <button class="btn btn--primary" data-act="start" disabled>Marcar inicio</button>
+        <button class="btn btn--success" data-act="finish" disabled>Marcar fin</button>
+        <button class="btn btn--danger" data-act="end" disabled>Finalizar prueba</button>
+      </div>
+    </footer>
+  </main>
+
+  <!-- ================= PANEL LATERAL ================= -->
+  <aside class="panel" id="panel">
+
+    <!-- Equipos -->
+    <section class="card card--list card--grow2" data-card="equipos">
+      <div class="card__head">
+        <h2 class="card__title">Equipos</h2>
+        <span class="chip chip--count" id="teamCount">0</span>
+      </div>
+      <div class="card__body">
+        <div class="row">
+          <button class="btn btn--primary btn--sm" data-act="load-excel">Cargar Excel</button>
+          <button class="btn btn--ghost btn--sm" data-act="clear-teams">Limpiar</button>
+        </div>
+        <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" hidden>
+        <input type="search" class="input" id="teamSearch" placeholder="Buscar equipo...">
+        <div class="dropzone" id="dropzone">Arrastra aqui tu .xlsx / .csv</div>
+        <ul class="teamlist" id="teamList"></ul>
+        <p class="empty" id="teamEmpty">Sin equipos cargados. Usa el boton <b>Cargar Excel</b>.</p>
+      </div>
+    </section>
+
+    <!-- Control -->
+    <section class="card card--fixed" data-card="control">
+      <div class="card__head">
+        <h2 class="card__title">Control de prueba</h2>
+      </div>
+      <div class="card__body">
+        <div class="grid2">
+          <button class="btn btn--primary" data-act="new-test">Nueva prueba</button>
+          <button class="btn btn--success" data-act="start">Marcar inicio</button>
+          <button class="btn btn--warn" data-act="finish">Marcar fin</button>
+          <button class="btn btn--danger btn--wide" data-act="end">Finalizar prueba y ver podio</button>
+        </div>
+        <p class="note" id="controlNote">Sin prueba activa.</p>
+      </div>
+    </section>
+
+    <!-- En vivo -->
+    <section class="card card--list card--grow3" data-card="vivo">
+      <div class="card__head">
+        <h2 class="card__title">En vivo</h2>
+        <span class="chip chip--count" id="liveCount">0</span>
+      </div>
+      <div class="card__body card__body--flush">
+        <div class="tablewrap">
+          <table class="table" id="liveTable">
+            <thead>
+              <tr>
+                <th>Equipo</th>
+                <th>Inicio</th>
+                <th>En curso</th>
+                <th>Duracion</th>
+                <th>Pos</th>
+              </tr>
+            </thead>
+            <tbody id="liveBody"></tbody>
+          </table>
+        </div>
+        <p class="empty" id="liveEmpty">Sin equipos en la prueba actual.</p>
+      </div>
+    </section>
+
+    <!-- Historial -->
+    <section class="card card--list card--grow2" data-card="historial">
+      <div class="card__head">
+        <h2 class="card__title">Historial de pruebas</h2>
+        <span class="chip chip--count" id="histCount">0</span>
+      </div>
+      <div class="card__body">
+        <ul class="history" id="historyList"></ul>
+        <p class="empty" id="historyEmpty">Todavia no hay pruebas finalizadas.</p>
+      </div>
+    </section>
+
+    <!-- Archivo / persistencia -->
+    <section class="card card--fixed" data-card="archivo">
+      <div class="card__head">
+        <h2 class="card__title">Guardar / Exportar</h2>
+      </div>
+      <div class="card__body">
+        <p class="note note--dim">Todo se autoguarda en este navegador. Exporta a Excel o CSV para compartir.</p>
+        <div class="grid3">
+          <button class="btn btn--ghost btn--sm" data-act="export-xlsx">.xlsx</button>
+          <button class="btn btn--ghost btn--sm" data-act="export-csv">.csv</button>
+          <button class="btn btn--ghost btn--sm" data-act="export-roster">Equipos</button>
+          <button class="btn btn--ghost btn--sm" data-act="export-json">Respaldo</button>
+          <button class="btn btn--ghost btn--sm" data-act="import-json">Importar</button>
+          <button class="btn btn--ghost btn--sm btn--danger-ghost" data-act="wipe">Borrar</button>
+        </div>
+        <input type="file" id="jsonInput" accept=".json" hidden>
+        <p class="note note--dim" id="saveState">Guardado automatico activo.</p>
+      </div>
+    </section>
+
+  </aside>
+</div>
+
+<!-- ================= MODAL GENERICO ================= -->
+<div class="modal" id="modal" hidden>
+  <div class="modal__backdrop" data-close="1"></div>
+  <div class="modal__box" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <header class="modal__head">
+      <div>
+        <h3 class="modal__title" id="modalTitle"></h3>
+        <p class="modal__sub" id="modalSub"></p>
+      </div>
+      <button class="iconbtn" data-close="1" aria-label="Cerrar">&times;</button>
+    </header>
+    <div class="modal__tools" id="modalTools">
+      <input type="search" class="input input--sm" id="modalSearch" placeholder="Buscar...">
+      <div class="row row--end">
+        <button class="btn btn--ghost btn--xs" id="modalAll">Todos</button>
+        <button class="btn btn--ghost btn--xs" id="modalNone">Ninguno</button>
+      </div>
+    </div>
+    <div class="modal__body" id="modalBody"></div>
+    <footer class="modal__foot" id="modalFoot"></footer>
+  </div>
+</div>
+
+<!-- ================= TOASTS ================= -->
+<div class="toasts" id="toasts"></div>
+
+<script src="vendor/jquery-3.7.1.min.js"></script>
+<script src="vendor/xlsx.full.min.js"></script>
+<script src="assets/js/core.js"></script>
+<script src="assets/js/excel.js"></script>
+<script src="assets/js/storage.js"></script>
+<script src="assets/js/app.js"></script>
+</body>
+</html>
